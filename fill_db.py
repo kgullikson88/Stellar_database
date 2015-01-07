@@ -4,16 +4,33 @@ import sys
 import sqlalchemy
 from SQLiteConnection import engine, Session
 from ModelClasses import *
+from astroquery.simbad import Simbad
 
-filename = 'student_data.txt'
+def fill_star_data(session, starlist_filename='starlist.dat'):
+    # Read in the star list
+    infile = open(starlist_filename)
+    starlist = infile.readlines()
+    infile.close()
 
-infile = open(filename)
+    # Make an appropriate Simbad search object
+    sim = Simbad()
+    #sim.add_votable_fields()
 
-session = Session()
+
+
+
+if __name__ == '__main__':
+    session = Session()
+
 
 """ ===========================================
 # My code here!
 =========================================== """
+
+"""
+filename = 'student_data.txt'
+
+infile = open(filename)
 
 lines = infile.readlines()
 for line in lines[5:]:
@@ -105,7 +122,7 @@ for line in lines[5:]:
 
     print 'Adding city {}'.format(city.name)
     student.city = city
-
+"""
 
 """ ===========================================
 # End my code!
