@@ -14,7 +14,12 @@ def fill_star_data(session, starlist_filename='starlist.dat'):
 
     # Make an appropriate Simbad search object
     sim = Simbad()
-    #sim.add_votable_fields()
+    sim.add_votable_fields('flux(V)', 'flux_error(V)', 'flux_bibcode(V)',
+                           'flux(K)', 'flux_error(K)', 'flux_bibcode(K)',
+                           'rot',
+                           'sp', 'sp_bibcode',
+                           'plx', 'plx_error', 'plx_bibcode',
+                           'rv_value', 'rvel', 'rvz_bibcode', 'rvz_error', 'rvz_radvel', 'rvz_type')
 
 
 
