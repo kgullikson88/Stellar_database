@@ -5,6 +5,23 @@ import sqlalchemy
 from SQLiteConnection import engine, Session
 from ModelClasses import *
 from astroquery.simbad import Simbad
+from astropy import units as u
+from astropy import constants
+
+
+def get_reference(session, bibcode):
+    """
+    Return a reference object for the specified bibcode
+    """
+    try:
+        entry = session.query(Reference).filter(Reference.ADS_link == bibcode).one()
+    except sqlalchemy.orm.exc.NoResultFound:
+        entry = Reference()
+        entry.ADS_link = bibcode
+
+        #TODO: get author name, journal, volume, page, and year
+    return entry
+
 
 def fill_star_data(session, starlist_filename='starlist.dat'):
     # Read in the star list
@@ -19,13 +36,84 @@ def fill_star_data(session, starlist_filename='starlist.dat'):
                            'rot',
                            'sp', 'sp_bibcode',
                            'plx', 'plx_error', 'plx_bibcode',
-                           'rv_value', 'rvel', 'rvz_bibcode', 'rvz_error', 'rvz_radvel', 'rvz_type')
+                           'rvel', 'rvz_bibcode', 'rvz_error', 'rvz_radvel', 'rvz_type')
+
+    # loop over the files
+    for starname in starlist:
+        # Get data from the Simbad database
+        star = sim.query_object(starname)
+        name = star['main_id'].item()
+        ra = star['RA'].item()
+        dec = star['DEC'].item()
+        Vmag = star['FLUX_V'].item()
+        e_Vmag = star['FLUX_ERROR_V'].item()
+        bib_Vmag = star['FLUX_BIBCODE_V'].item()
+        Kmag = star['FLUX_K'].item()
+        e_Kmag = star['FLUX_ERROR_K'].item()
+        bib_Kmag = star['FLUX_BIBCODE_K'].item()
+        plx = star['PLX_VALUE'].item()
+        e_plx = star['PLX_ERROR'].item()
+        bib_plx = star['PLX_BIBCODE'].item()
+        vsini = star['ROT_Vsini'].item()
+        spt = star['SP_TYPE'].item()
+        bib_spt = star['SP_BIBCODE'].item()
+        rv = star['RVZ_RADVEL'].item()
+        e_rv = star['RV_ERROR'].item()
+        rv_type = star['RVZ_TYPE'].item()
+        bib_rv = star['RVZ_BIBCODE'].item()
+        if 'z' in rv_type:
+            rv /= constants.c.cgs.to(u.km/u.sec).value
+            e_rv /= constants.c.cgs.to(u.km/u.sec).value
+
+        # Get the necessary reference objects
+        Vmag_ref = get_reference(session, bib_Vmag if len(bib_Vmag).strip() > 0 else 'Unknown')
+        Kmag_ref = get_reference(session, bib_Kmag if len(bib_Kmag).strip() > 0 else 'Unknown')
+        plx_ref = get_reference(session, bib_plx if len(bib_plx).strip() > 0 else 'Unknown')
+        spt_ref = get_reference(session, bib_spt if len(bib_spt).strip() > 0 else 'Unknown')
+        rv_ref = get_reference(session, bib_rv if len(bib_rv).strip() > 0 else 'Unknown')
+
+        # Add the data to the database
+        try:
+            entry = session.query(Star).filter(Star.name == name).one()
+        except sqlalchemy.orm.exc.NoResultFound:
+            entry = Star()
+            entry.name = name
+            entry.RA = ra
+            entry.DEC = dec
+            entry.Vmag = Vmag
+            entry.Vmag_error = e_Vmag
+            entry.Vmag_ref = Vmag_ref
+            entry.Kmag = Kmag
+            entry.Kmag_error = e_Kmag
+            entry.Kmag_ref = Kmag_ref
+            entry.parallax = plx
+            entry.parallax_error = e_plx
+            entry.parallax_ref = plx_ref
+            entry.vsini = vsini
+            entry.spectral_type = spt
+            entry.spectral_type_ref = spt_ref
+            entry.vsys = rv
+            entry.vsys_error = e_rv
+            entry.vsys_ref = rv_ref
+
+        session.add(entry)
+
+    return
+
+
+
+
+
 
 
 
 
 if __name__ == '__main__':
     session = Session()
+    fill_star_data(session)
+
+    #session.commit()
+    #engine.dispose()
 
 
 """ ===========================================
