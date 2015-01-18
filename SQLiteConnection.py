@@ -1,11 +1,13 @@
 #!/usr/bin/python
 
 from __future__ import print_function
-import sqlalchemy
+
 from sqlalchemy.event import listens_for
 from sqlalchemy.pool import Pool
 from sqlalchemy.orm import sessionmaker, scoped_session
+
 from DatabaseConnection import DatabaseConnection
+
 
 '''
 Notes:
@@ -57,5 +59,5 @@ engine = db.engine
 
 metadata = db.metadata
 #Session = sessionmaker(bind=engine, autocommit=True, autoflush=False)
-Session = scoped_session(sessionmaker(bind=engine, autocommit=True, autoflush=False))
+Session = scoped_session(sessionmaker(bind=engine, autocommit=True, autoflush=True))
 
