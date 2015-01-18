@@ -39,7 +39,8 @@ CREATE TABLE "star" ("id" INTEGER PRIMARY KEY  AUTOINCREMENT  NOT NULL  UNIQUE, 
                     FOREIGN KEY (vsys_ref_id) REFERENCES reference (id), 
                     FOREIGN KEY (parallax_ref_id) REFERENCES reference (id), 
                     FOREIGN KEY (Vmag_ref_id) REFERENCES reference (id), 
-                    FOREIGN KEY (Kmag_ref_id) REFERENCES reference (id));
+                    FOREIGN KEY (Kmag_ref_id) REFERENCES reference (id),
+                    FOREIGN KEY (cluster_id) REFERENCES cluster (id));
 
 DROP TABLE IF EXISTS "star_system";
 CREATE TABLE "star_system" ("id" INTEGER PRIMARY KEY  AUTOINCREMENT  NOT NULL  UNIQUE , "star1_id" INTEGER, "star2_id" INTEGER, "separation" FLOAT, "separation_error" FLOAT, "separation_ref_id" INTEGER, "period" FLOAT, "period_error" FLOAT, "spec_ref_id" INTEGER, "K1" FLOAT, "K1_error" FLOAT, "K2" FLOAT, "K2_error" FLOAT, FOREIGN KEY (star1_id) REFERENCES star (id), FOREIGN KEY (star2_id) REFERENCES star (id), FOREIGN KEY (separation_ref_id) REFERENCES reference (id), FOREIGN KEY (spec_ref_id) REFERENCES reference (id));
