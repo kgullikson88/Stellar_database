@@ -14,16 +14,16 @@ def get_reference(session, bibcode):
     Return a reference object for the specified bibcode
     """
     try:
-        entry = session.query(Reference).filter(Reference.ADS_link == bibcode).one()
+        entry = session.query(Reference).filter(Reference.bibcode == bibcode).one()
     except sqlalchemy.orm.exc.NoResultFound:
         entry = Reference()
-        entry.ADS_link = bibcode
+        entry.bibcode = bibcode
 
         #TODO: get author name, journal, volume, page, and year
     return entry
 
 
-def fill_star_data(session, starlist_filename='starlist.dat'):
+def get_simbad_data(session, starlist_filename='starlist.dat'):
     # Read in the star list
     infile = open(starlist_filename)
     starlist = infile.readlines()
@@ -110,10 +110,10 @@ def fill_star_data(session, starlist_filename='starlist.dat'):
 
 if __name__ == '__main__':
     session = Session()
-    fill_star_data(session)
+    get_simbad_data(session)
 
-    #session.commit()
-    #engine.dispose()
+    session.commit()
+    engine.dispose()
 
 
 """ ===========================================
