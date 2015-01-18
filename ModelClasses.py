@@ -1,12 +1,9 @@
 #!/usr/bin/python
 
-from DatabaseConnection import DatabaseConnection
-
-import sqlalchemy
 from sqlalchemy.ext.declarative import declarative_base
-from sqlalchemy.orm import mapper, relation, exc, column_property, validates
-from sqlalchemy import orm
-from sqlalchemy.orm.session import Session
+from sqlalchemy.orm import relation
+
+from DatabaseConnection import DatabaseConnection
 
 dbc = DatabaseConnection()
 
@@ -22,6 +19,17 @@ class Star(Base):
 class Reference(Base):
 	__tablename__ = 'reference'
 	__table_args__ = {'autoload' : True}
+
+
+class Author(Base):
+    __tablename__ = 'author'
+    __table_args__ = {'autoload': True}
+
+
+class Reference_to_Author(Base):
+    __tablename__ = 'reference_to_author'
+    __table_args__ = {'autoload': True}
+
 
 class Journal(Base):
 	__tablename__ = 'journal'
@@ -72,6 +80,10 @@ Star.cluster = relation(Cluster, backref='stars')
 
 #####     Reference relationships       #####
 Reference.journal = relation(Journal, backref='references')
+Reference.authors = relation(Author, secondary=Reference_to_Author.__table__, backref='journals')
+
+# ####     Cluster relationships         #####
+Cluster.reference = relation(Reference)
 
 #####     Star system relationships       #####
 Star_System.primary = relation(Star, backref='star_systems', foreign_keys=['star1_id'])
@@ -87,16 +99,3 @@ Observation.ccf = relation(CCF, backref='observation')
 
 #####     Instrument relationships       #####
 Instrument.reference = relation(Reference)
-
-
-
-"""
-Student.clubs = relation(Club,
-						 secondary=StudentToClub.__table__,
-						 backref="students")
-Student.status = relation(Status, backref="students")
-Student.city = relation(City, backref="students")
-Student.supervisors = relation(Supervisor,
-							   secondary=StudentToSupervisor.__table__,
-							   backref="students")
-"""
