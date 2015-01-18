@@ -1,26 +1,30 @@
 #!/usr/bin/python
+from __future__ import print_function
 
-import sys
 import sqlalchemy
-from SQLiteConnection import engine, Session
-from ModelClasses import *
 from astroquery.simbad import Simbad
 from astropy import units as u
 from astropy import constants
+import HelperFunctions
+
+from SQLiteConnection import engine, Session
+from ModelClasses import *
 
 
 def get_reference(session, bibcode):
     """
     Return a reference object for the specified bibcode
     """
+    # entry = session.query(Reference).filter(Reference.bibcode == bibcode).one()
     try:
         entry = session.query(Reference).filter(Reference.bibcode == bibcode).one()
     except sqlalchemy.orm.exc.NoResultFound:
         entry = Reference()
         entry.bibcode = bibcode
+        session.add(entry)
 
         #TODO: get author name, journal, volume, page, and year
-    return entry
+    return entry, session
 
 
 def get_simbad_data(session, starlist_filename='starlist.dat'):
@@ -42,9 +46,11 @@ def get_simbad_data(session, starlist_filename='starlist.dat'):
     for starname in starlist:
         # Get data from the Simbad database
         star = sim.query_object(starname)
-        name = star['main_id'].item()
-        ra = star['RA'].item()
-        dec = star['DEC'].item()
+        print(starname)
+        # print star.keys()
+        name = star['MAIN_ID'].item()
+        ra = HelperFunctions.convert_hex_string(star['RA'].item(), delimiter=' ')
+        dec = HelperFunctions.convert_hex_string(star['DEC'].item(), delimiter=' ')
         Vmag = star['FLUX_V'].item()
         e_Vmag = star['FLUX_ERROR_V'].item()
         bib_Vmag = star['FLUX_BIBCODE_V'].item()
@@ -58,7 +64,7 @@ def get_simbad_data(session, starlist_filename='starlist.dat'):
         spt = star['SP_TYPE'].item()
         bib_spt = star['SP_BIBCODE'].item()
         rv = star['RVZ_RADVEL'].item()
-        e_rv = star['RV_ERROR'].item()
+        e_rv = star['RVZ_ERROR'].item()
         rv_type = star['RVZ_TYPE'].item()
         bib_rv = star['RVZ_BIBCODE'].item()
         if 'z' in rv_type:
@@ -66,11 +72,12 @@ def get_simbad_data(session, starlist_filename='starlist.dat'):
             e_rv /= constants.c.cgs.to(u.km/u.sec).value
 
         # Get the necessary reference objects
-        Vmag_ref = get_reference(session, bib_Vmag if len(bib_Vmag).strip() > 0 else 'Unknown')
-        Kmag_ref = get_reference(session, bib_Kmag if len(bib_Kmag).strip() > 0 else 'Unknown')
-        plx_ref = get_reference(session, bib_plx if len(bib_plx).strip() > 0 else 'Unknown')
-        spt_ref = get_reference(session, bib_spt if len(bib_spt).strip() > 0 else 'Unknown')
-        rv_ref = get_reference(session, bib_rv if len(bib_rv).strip() > 0 else 'Unknown')
+        print(bib_Vmag)
+        Vmag_ref, session = get_reference(session, bib_Vmag if len(bib_Vmag.strip()) > 0 else 'Unknown')
+        Kmag_ref, session = get_reference(session, bib_Kmag if len(bib_Kmag.strip()) > 0 else 'Unknown')
+        plx_ref, session = get_reference(session, bib_plx if len(bib_plx.strip()) > 0 else 'Unknown')
+        spt_ref, session = get_reference(session, bib_spt if len(bib_spt.strip()) > 0 else 'Unknown')
+        rv_ref, session = get_reference(session, bib_rv if len(bib_rv.strip()) > 0 else 'Unknown')
 
         # Add the data to the database
         try:
@@ -98,7 +105,7 @@ def get_simbad_data(session, starlist_filename='starlist.dat'):
 
         session.add(entry)
 
-    return
+    return session
 
 
 
@@ -110,7 +117,8 @@ def get_simbad_data(session, starlist_filename='starlist.dat'):
 
 if __name__ == '__main__':
     session = Session()
-    get_simbad_data(session)
+    session.begin()
+    session = get_simbad_data(session)
 
     session.commit()
     engine.dispose()
@@ -220,8 +228,3 @@ for line in lines[5:]:
 """ ===========================================
 # End my code!
 =========================================== """
-
-session.commit()
-
-engine.dispose()
-sys.exit(0)

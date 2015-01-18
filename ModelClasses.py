@@ -16,23 +16,27 @@ Base = declarative_base(bind=dbc.engine)
 
 class Journal(Base):
     __tablename__ = 'journal'
-	__table_args__ = {'autoload' : True}
+    __table_args__ = {'autoload': True}
+
 
 class Reference(Base):
-	__tablename__ = 'reference'
-	__table_args__ = {'autoload' : True}
+    __tablename__ = 'reference'
+    __table_args__ = {'autoload': True}
+
 
 class Author(Base):
     __tablename__ = 'author'
     __table_args__ = {'autoload': True}
 
+
 class Reference_to_Author(Base):
     __tablename__ = 'reference_to_author'
     __table_args__ = {'autoload': True}
 
+
 class Cluster(Base):
-	__tablename__ = 'cluster'
-	__table_args__ = {'autoload' : True}
+    __tablename__ = 'cluster'
+    __table_args__ = {'autoload': True}
 
 
 class Star(Base):
@@ -41,33 +45,33 @@ class Star(Base):
 
 
 class Star_System(Base):
-	__tablename__ = 'star_system'
-	__table_args__ = {'autoload' : True}
+    __tablename__ = 'star_system'
+    __table_args__ = {'autoload': True}
 
 
 class Instrument(Base):
     __tablename__ = 'instrument'
-	__table_args__ = {'autoload' : True}
+    __table_args__ = {'autoload': True}
+
 
 class Spectrum(Base):
-	__tablename__ = 'spectrum'
-	__table_args__ = {'autoload' : True}
+    __tablename__ = 'spectrum'
+    __table_args__ = {'autoload': True}
+
 
 class CCF(Base):
-	__tablename__ = 'ccf'
-	__table_args__ = {'autoload' : True}
+    __tablename__ = 'ccf'
+    __table_args__ = {'autoload': True}
 
 
 class Observation(Base):
     __tablename__ = 'observation'
-	__table_args__ = {'autoload' : True}
+    __table_args__ = {'autoload': True}  # =========================
 
-
-# =========================
 # Define relationships here
 # =========================
 
-#####     Star relationships       #####
+# ####     Star relationships       #####
 Star.temperature_ref = relation(Reference, foreign_keys=[Star.temperature_ref_id])
 Star.logg_ref = relation(Reference, foreign_keys=[Star.logg_ref_id])
 Star.metallicity_ref = relation(Reference, foreign_keys=[Star.metallicity_ref_id])
