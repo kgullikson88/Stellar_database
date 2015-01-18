@@ -16,7 +16,7 @@ DROP TABLE IF EXISTS "cluster";
 CREATE TABLE "cluster" ("id" INTEGER PRIMARY KEY  AUTOINCREMENT  NOT NULL  UNIQUE , "name" TEXT, "age" FLOAT, "age_error" FLOAT, "distance" FLOAT, "distance_error" FLOAT, "RA" FLOAT, "DEC" FLOAT, "reference_id" INTEGER, FOREIGN KEY (reference_id) REFERENCES reference (id));
 
 DROP TABLE IF EXISTS "star";
-CREATE TABLE "star" ("id" INTEGER PRIMARY KEY  AUTOINCREMENT  NOT NULL  UNIQUE, "name" TEXT , "cluster_id" INTEGER
+CREATE TABLE "star" ("id" INTEGER PRIMARY KEY  AUTOINCREMENT  NOT NULL  UNIQUE, "name" TEXT , "cluster_id" INTEGER,
                      "spectral_type" TEXT, "spectral_type_ref_id" INTEGER, 
                      "temperature" FLOAT, "temperature_error" FLOAT, "temperature_ref_id" INTEGER, 
                      "logg" FLOAT, "logg_error" FLOAT, "logg_ref_id" INTEGER, 
