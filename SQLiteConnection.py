@@ -59,5 +59,5 @@ engine = db.engine
 
 metadata = db.metadata
 #Session = sessionmaker(bind=engine, autocommit=True, autoflush=False)
-Session = scoped_session(sessionmaker(bind=engine, autocommit=True, autoflush=True))
+Session = scoped_session(sessionmaker(bind=engine, autocommit=True, autoflush=False))
 

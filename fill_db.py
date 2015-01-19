@@ -1,8 +1,11 @@
 #!/usr/bin/python
 from __future__ import print_function
 
+import logging
+
 import sqlalchemy
 from astroquery.simbad import Simbad
+from astroquery.vizier import Vizier
 from astropy import units as u
 from astropy import constants
 import HelperFunctions
@@ -15,16 +18,84 @@ def get_reference(session, bibcode):
     """
     Return a reference object for the specified bibcode
     """
-    # entry = session.query(Reference).filter(Reference.bibcode == bibcode).one()
     try:
         entry = session.query(Reference).filter(Reference.bibcode == bibcode).one()
     except sqlalchemy.orm.exc.NoResultFound:
         entry = Reference()
         entry.bibcode = bibcode
         session.add(entry)
+        session.flush()
 
         #TODO: get author name, journal, volume, page, and year
     return entry, session
+
+
+class StellarParameter():
+    def __init__(self, sql_session):
+        self.pastel = Vizier(columns=['_RAJ2000', 'DEJ2000', 'ID', 'Teff', 'e_Teff',
+                                      'logg', 'e_logg', '[Fe/H]', 'e_[Fe/H]', 'bibcode'],
+                             catalog='B/pastel/pastel')
+        self.pastel_bibcode = '2010A&A...515A.111S'
+        self.sql_session = sql_session
+
+    def get_pastel_pars(self, starname):
+        """
+        Get stellar parameters from the pastel catalog for the given star, and put them in the database
+        :param starname: the name (main id) of the star, as it appears in the database!
+        :return: bool (False if failed, True if success)
+        """
+        try:
+            star = self.sql_session.query(Star).filter(Star.name == starname).one()
+        except sqlalchemy.orm.exc.NoResultFound:
+            raise ValueError('Must put star in database before giving it parameters!')
+
+        output = self.pastel.query_object(starname)
+        if len(output) == 0:
+            logging.warn('No match for star {} in Pastel catalog'.format(starname))
+            return False
+        data = output[0]
+        if len(data) > 1:
+            logging.warn('Multiple matches for star {} in Pastel catalog. Using the first one!'.format(starname))
+            data.remove_rows(range(1, len(data)))
+
+        bibcode = data['bibcode'].item().strip()
+        ref, self.sql_session = get_reference(self.sql_session, bibcode if len(bibcode) > 0 else 'Unknown')
+        print(data)
+        print(ref)
+        if not data['Teff'].mask:
+            star.temperature = data['Teff'].item()
+            print(bibcode)
+            star.temperature_ref = ref
+        if not data['e_Teff'].mask:
+            star.temperature_error = data['e_Teff'].item()
+        if not data['logg'].mask:
+            star.logg = data['logg'].item()
+            star.logg_ref = ref
+        if not data['e_logg'].mask:
+            star.logg_error = data['e_logg'].item()
+        if not data['__Fe_H_'].mask:
+            star.metallicity = data['__Fe_H_'].item()
+            star.metallicity_ref = ref
+        if not data['e__Fe_H_'].mask:
+            star.metallicity_error = data['e__Fe_H_'].item()
+
+        return True
+
+    def get_all_pars(self):
+        """
+          Fill all the parameters from known catalogs
+        """
+        success = []
+        fail = []
+        for star in self.sql_session.query(Star).all():
+            print(star.name)
+            out = self.get_pastel_pars(star.name)
+            if out:
+                success.append(out)
+            else:
+                fail.append(out)
+        logging.info('Of all stars in the database, we got stellar parameters for {} of them'.format(len(success)))
+        return
 
 
 def get_simbad_data(session, starlist_filename='starlist.dat'):
@@ -44,71 +115,111 @@ def get_simbad_data(session, starlist_filename='starlist.dat'):
 
     # loop over the files
     for starname in starlist:
+        # Default values are None for everything
+        name = None
+        ra = None
+        dec = None
+        Vmag = None
+        e_Vmag = None
+        bib_Vmag = ''
+        Kmag = None
+        e_Kmag = None
+        bib_Kmag = ''
+        plx = None
+        e_plx = None
+        bib_plx = ''
+        vsini = None
+        e_vsini = None
+        bib_vsini = ''
+        spt = None
+        bib_spt = ''
+        rv = None
+        e_rv = None
+        rv_type = None
+        bib_rv = ''
+
+        conversion_dict = {name: 'MAIN_ID', ra: 'RA', dec: 'DEC',
+                           Vmag: 'FLUX_V', e_Vmag: 'FLUX_ERROR_V', bib_Vmag: 'FLUX_BIBCODE_V',
+                           Kmag: 'FLUX_K', e_Kmag: 'FLUX_ERROR_K', bib_Kmag: 'FLUX_BIBCODE_K',
+                           plx: 'PLX_VALUE'
+        }
+
+
+
         # Get data from the Simbad database
         star = sim.query_object(starname)
         print(starname)
-        # print star.keys()
-        name = star['MAIN_ID'].item()
+
+        test_aq = lambda key, default=None: star[key].item() if not star[key].mask else default
+        name = test_aq('MAIN_ID')
         ra = HelperFunctions.convert_hex_string(star['RA'].item(), delimiter=' ')
         dec = HelperFunctions.convert_hex_string(star['DEC'].item(), delimiter=' ')
-        Vmag = star['FLUX_V'].item()
-        e_Vmag = star['FLUX_ERROR_V'].item()
-        bib_Vmag = star['FLUX_BIBCODE_V'].item()
-        Kmag = star['FLUX_K'].item()
-        e_Kmag = star['FLUX_ERROR_K'].item()
-        bib_Kmag = star['FLUX_BIBCODE_K'].item()
-        plx = star['PLX_VALUE'].item()
-        e_plx = star['PLX_ERROR'].item()
-        bib_plx = star['PLX_BIBCODE'].item()
-        vsini = star['ROT_Vsini'].item()
-        spt = star['SP_TYPE'].item()
-        bib_spt = star['SP_BIBCODE'].item()
-        rv = star['RVZ_RADVEL'].item()
-        e_rv = star['RVZ_ERROR'].item()
-        rv_type = star['RVZ_TYPE'].item()
-        bib_rv = star['RVZ_BIBCODE'].item()
+        Vmag = test_aq('FLUX_V')
+        e_Vmag = test_aq('FLUX_ERROR_V')
+        bib_Vmag = test_aq('FLUX_BIBCODE_V', default='')
+        Kmag = test_aq('FLUX_K')
+        e_Kmag = test_aq('FLUX_ERROR_K')
+        bib_Kmag = test_aq('FLUX_BIBCODE_K', default='')
+        plx = test_aq('PLX_VALUE')
+        e_plx = test_aq('PLX_ERROR')
+        bib_plx = test_aq('PLX_BIBCODE', default='')
+        vsini = test_aq('ROT_Vsini')
+        e_vsini = test_aq('ROT_err')
+        bib_vsini = test_aq('ROT_bibcode', default='')
+        spt = test_aq('SP_TYPE')
+        bib_spt = test_aq('SP_BIBCODE', default='')
+        rv = test_aq('RVZ_RADVEL')
+        e_rv = test_aq('RVZ_ERROR')
+        rv_type = test_aq('RVZ_TYPE')
+        bib_rv = test_aq('RVZ_BIBCODE', default='')
         if 'z' in rv_type:
             rv /= constants.c.cgs.to(u.km/u.sec).value
             e_rv /= constants.c.cgs.to(u.km/u.sec).value
 
         # Get the necessary reference objects
-        print(bib_Vmag)
         Vmag_ref, session = get_reference(session, bib_Vmag if len(bib_Vmag.strip()) > 0 else 'Unknown')
         Kmag_ref, session = get_reference(session, bib_Kmag if len(bib_Kmag.strip()) > 0 else 'Unknown')
         plx_ref, session = get_reference(session, bib_plx if len(bib_plx.strip()) > 0 else 'Unknown')
         spt_ref, session = get_reference(session, bib_spt if len(bib_spt.strip()) > 0 else 'Unknown')
         rv_ref, session = get_reference(session, bib_rv if len(bib_rv.strip()) > 0 else 'Unknown')
+        vsini_ref, session = get_reference(session, bib_vsini if len(bib_vsini.strip()) > 0 else 'Unknown')
 
         # Add the data to the database
         try:
             entry = session.query(Star).filter(Star.name == name).one()
         except sqlalchemy.orm.exc.NoResultFound:
             entry = Star()
-            entry.name = name
-            entry.RA = ra
-            entry.DEC = dec
-            entry.Vmag = Vmag
-            entry.Vmag_error = e_Vmag
+            entry.name = None if (isinstance(name, str) and name.strip() == '') else name
+            entry.RA = None if (isinstance(ra, str) and ra.strip() == '') else ra
+            entry.DEC = None if (isinstance(dec, str) and dec.strip() == '') else dec
+            entry.Vmag = None if (isinstance(Vmag, str) and Vmag.strip() == '') else Vmag
+            entry.Vmag_error = None if (isinstance(e_Vmag, str) and e_Vmag.strip() == '') else e_Vmag
             entry.Vmag_ref = Vmag_ref
-            entry.Kmag = Kmag
-            entry.Kmag_error = e_Kmag
+            entry.Kmag = None if (isinstance(Kmag, str) and Kmag.strip() == '') else Kmag
+            entry.Kmag_error = None if (isinstance(e_Kmag, str) and e_Kmag.strip() == '') else e_Kmag
             entry.Kmag_ref = Kmag_ref
-            entry.parallax = plx
-            entry.parallax_error = e_plx
+            entry.parallax = None if (isinstance(plx, str) and plx.strip() == '') else plx
+            entry.parallax_error = None if (isinstance(e_plx, str) and e_plx.strip() == '') else e_plx
             entry.parallax_ref = plx_ref
-            entry.vsini = vsini
-            entry.spectral_type = spt
+            entry.vsini = None if (isinstance(vsini, str) and vsini.strip() == '') else vsini
+            entry.vsini_error = None if (isinstance(e_vsini, str) and e_vsini.strip() == '') else e_vsini
+            entry.vsini_ref = vsini_ref
+            entry.spectral_type = None if (isinstance(spt, str) and spt.strip() == '') else spt
             entry.spectral_type_ref = spt_ref
-            entry.vsys = rv
-            entry.vsys_error = e_rv
+            entry.vsys = None if (isinstance(rv, str) and rv.strip() == '') else rv
+            entry.vsys_error = None if (isinstance(e_rv, str) and e_rv.strip() == '') else e_rv
             entry.vsys_ref = rv_ref
 
         session.add(entry)
+        session.flush()
 
     return session
 
 
-
+def add_stellar_parameters(session):
+    SP = StellarParameter(session)
+    SP.get_all_pars()
+    return SP.sql_session
 
 
 
@@ -118,7 +229,8 @@ def get_simbad_data(session, starlist_filename='starlist.dat'):
 if __name__ == '__main__':
     session = Session()
     session.begin()
-    session = get_simbad_data(session)
+    # session = get_simbad_data(session)
+    session = add_stellar_parameters(session)
 
     session.commit()
     engine.dispose()
