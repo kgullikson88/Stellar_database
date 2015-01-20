@@ -98,6 +98,14 @@ class StellarParameter():
         return
 
 
+
+class Multiplicity():
+    def __init__(self):
+        #TODO: Read multiplicity databases in pandas structures, and put them in the database
+        pass
+
+
+
 def get_simbad_data(session, starlist_filename='starlist.dat'):
     # Read in the star list
     infile = open(starlist_filename)
@@ -115,37 +123,6 @@ def get_simbad_data(session, starlist_filename='starlist.dat'):
 
     # loop over the files
     for starname in starlist:
-        # Default values are None for everything
-        name = None
-        ra = None
-        dec = None
-        Vmag = None
-        e_Vmag = None
-        bib_Vmag = ''
-        Kmag = None
-        e_Kmag = None
-        bib_Kmag = ''
-        plx = None
-        e_plx = None
-        bib_plx = ''
-        vsini = None
-        e_vsini = None
-        bib_vsini = ''
-        spt = None
-        bib_spt = ''
-        rv = None
-        e_rv = None
-        rv_type = None
-        bib_rv = ''
-
-        conversion_dict = {name: 'MAIN_ID', ra: 'RA', dec: 'DEC',
-                           Vmag: 'FLUX_V', e_Vmag: 'FLUX_ERROR_V', bib_Vmag: 'FLUX_BIBCODE_V',
-                           Kmag: 'FLUX_K', e_Kmag: 'FLUX_ERROR_K', bib_Kmag: 'FLUX_BIBCODE_K',
-                           plx: 'PLX_VALUE'
-        }
-
-
-
         # Get data from the Simbad database
         star = sim.query_object(starname)
         print(starname)
@@ -187,6 +164,7 @@ def get_simbad_data(session, starlist_filename='starlist.dat'):
         # Add the data to the database
         try:
             entry = session.query(Star).filter(Star.name == name).one()
+            print('Star ({}) already in database! Skipping...'.format(starname))
         except sqlalchemy.orm.exc.NoResultFound:
             entry = Star()
             entry.name = None if (isinstance(name, str) and name.strip() == '') else name
@@ -210,8 +188,8 @@ def get_simbad_data(session, starlist_filename='starlist.dat'):
             entry.vsys_error = None if (isinstance(e_rv, str) and e_rv.strip() == '') else e_rv
             entry.vsys_ref = rv_ref
 
-        session.add(entry)
-        session.flush()
+            session.add(entry)
+            session.flush()
 
     return session
 
@@ -229,8 +207,8 @@ def add_stellar_parameters(session):
 if __name__ == '__main__':
     session = Session()
     session.begin()
-    # session = get_simbad_data(session)
-    session = add_stellar_parameters(session)
+    session = get_simbad_data(session)
+    #session = add_stellar_parameters(session)
 
     session.commit()
     engine.dispose()
