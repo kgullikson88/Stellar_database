@@ -12,6 +12,8 @@ import HelperFunctions
 
 from SQLiteConnection import engine, Session
 from ModelClasses import *
+import os
+import pandas as pd
 
 
 def get_reference(session, bibcode):
@@ -100,9 +102,50 @@ class StellarParameter():
 
 
 class Multiplicity():
-    def __init__(self):
-        #TODO: Read multiplicity databases in pandas structures, and put them in the database
-        pass
+    def __init__(self, csv_dir='{}/Dropbox/School/Research/Databases/A_star/Multiplicity/'.format(os.environ['HOME'])):
+        self.sb9 = pd.read_csv('{}SB9_WithNames.txt'.format(csv_dir), sep='|')
+        self.wds = pd.read_csv('{}WDS_WithNames.txt'.format(csv_dir), sep='|')
+        self.vast = pd.read_csv('{}VAST_WithNames.txt'.format(csv_dir), sep='|')
+        self.et08 = pd.read_csv('{}ET2008_WithNames.txt'.format(csv_dir), sep='|')
+
+        # Convert the DEC to the appropriate format in WDS
+        self.wds['DEC'] = self.wds['DEC'].map(lambda s: HelperFunctions.convert_hex_string(s, delimiter=' '))
+
+    def check_multiplicity(self, db_session, d=1.0):
+        """
+        Cross-references the database stars against the multiplicity databases
+        :param db_session: a sqlalchemy session instance
+        :keyword d: The on-sky distance between the database star and the entry in the multiplicity databases (in arcsec)
+        """
+        d /= 3600.0  #Convert d to degrees
+        for star in db_session.query(Star).all():
+            print(star.name)
+            ra = star.RA * 15.0
+            dec = star.DEC
+            sb9 = self.sb9.loc[((self.sb9.RA - ra)**2 < d) & ((self.sb9.DEC - dec)**2 < d)].drop_duplicates()
+            wds = self.wds.loc[((self.wds.RA - ra)**2 < d) & ((self.wds.DEC - dec)**2 < d)].drop_duplicates()
+            vast = self.vast.loc[((self.vast.RA - ra)**2 < d) & ((self.vast.DEC - dec)**2 < d)].drop_duplicates()
+            et08 = self.et08.loc[((self.et08.RA - ra)**2 < d) & ((self.et08.DEC - dec)**2 < d)].drop_duplicates()
+
+            if len(sb9) > 0:
+                self.parse_sb9(sb9, star)
+
+
+    def parse_sb9(self, df, star):
+        """
+        Pull the information I am interested in out of the SB9 catalog
+        """
+        cols = [u'mag1', u'mag2', u'Sp1', u'Sp2', u'Per', u'e_Per', u'K1', u'e_K1', u'K2', u'e_K2']
+        info  = df[cols]
+        #TODO: Determine the angular separation given the information (which is often incomplete!)
+        plx = star.parallax   #Parallax does not always even exist! Get from spectral type and magnitude?
+        d = 1e3/plx   #Distance to the star, in pc
+
+        print(info)
+        return info
+
+
+
 
 
 
