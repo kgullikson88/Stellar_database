@@ -2,6 +2,7 @@
 from __future__ import print_function
 
 import logging
+import os
 
 import sqlalchemy
 from astroquery.simbad import Simbad
@@ -9,12 +10,13 @@ from astroquery.vizier import Vizier
 from astropy import units as u
 from astropy import constants
 import HelperFunctions
+import pandas as pd
+import SpectralTypeRelations
 
 from SQLiteConnection import engine, Session
 from ModelClasses import *
-import os
-import pandas as pd
 
+MS = SpectralTypeRelations.MainSequence()
 
 def get_reference(session, bibcode):
     """
@@ -109,6 +111,7 @@ class Multiplicity():
         self.et08 = pd.read_csv('{}ET2008_WithNames.txt'.format(csv_dir), sep='|')
 
         # Convert the DEC to the appropriate format in WDS
+        self.wds = self.wds.dropna(subset=['RA', 'DEC'])
         self.wds['DEC'] = self.wds['DEC'].map(lambda s: HelperFunctions.convert_hex_string(s, delimiter=' '))
 
     def check_multiplicity(self, db_session, d=1.0):
@@ -129,21 +132,52 @@ class Multiplicity():
 
             if len(sb9) > 0:
                 self.parse_sb9(sb9, star)
+            if len(wds) > 0:
+                self.parse_wds(wds, star)
+            if len(vast) > 0:
+                self.parse_vast(vast, star)
+            if len(et08) > 0:
+                self.parse_et08(et08, star)
 
 
     def parse_sb9(self, df, star):
         """
         Pull the information I am interested in out of the SB9 catalog
         """
-        cols = [u'mag1', u'mag2', u'Sp1', u'Sp2', u'Per', u'e_Per', u'K1', u'e_K1', u'K2', u'e_K2']
+        cols = [u'Sp1', u'Sp2', u'Per', u'e_Per', u'K1', u'e_K1', u'K2', u'e_K2']
         info  = df[cols]
-        #TODO: Determine the angular separation given the information (which is often incomplete!)
-        plx = star.parallax   #Parallax does not always even exist! Get from spectral type and magnitude?
-        d = 1e3/plx   #Distance to the star, in pc
+        info['Separation'] = 0.0  # Basically 0 if it has a spectroscopic orbit
 
-        print(info)
         return info
 
+    def parse_wds(self, df, star):
+        """
+        Pull the relevant information from the wds catalog
+        """
+        cols = ['sep2', 'mag1', 'mag2', 'RefCode', 'Disc']
+        info = df[cols]
+        return info
+
+    def parse_vast(self, df, star):
+        print(df.keys())
+        cols = ['Age', 'AgeRef', 'Mass1', 'Mass2', 'MagDiff', 'Band', 'Separation']
+        info = df[cols]
+        return info
+
+    def parse_et08(self, df, star):
+        print(df.keys())
+        print(df)
+        cols = ['Conf', 'Cluster', 'BibCode']
+        info = df[cols]
+        info = info.drop_duplicates()
+
+        # Parse the configuration
+        outfile = open('configurations.txt', 'a')
+        vals = info['Conf'].values
+        for val in vals:
+            outfile.write(val.strip() + '\n')
+        outfile.close()
+        return info
 
 
 
