@@ -3,6 +3,8 @@ from __future__ import print_function
 
 import logging
 import os
+import re
+import numpy as np
 
 import sqlalchemy
 from astroquery.simbad import Simbad
@@ -15,6 +17,7 @@ import SpectralTypeRelations
 
 from SQLiteConnection import engine, Session
 from ModelClasses import *
+from collections import defaultdict
 
 MS = SpectralTypeRelations.MainSequence()
 
@@ -137,7 +140,8 @@ class Multiplicity():
             if len(vast) > 0:
                 self.parse_vast(vast, star)
             if len(et08) > 0:
-                self.parse_et08(et08, star)
+                out = self.parse_et08(et08, star)
+                print(out)
 
 
     def parse_sb9(self, df, star):
@@ -172,12 +176,70 @@ class Multiplicity():
         info = info.drop_duplicates()
 
         # Parse the configuration
-        outfile = open('configurations.txt', 'a')
-        vals = info['Conf'].values
-        for val in vals:
-            outfile.write(val.strip() + '\n')
-        outfile.close()
-        return info
+        def conf_parser(s):
+            stack = []
+            for n, c in enumerate(s):
+                if c == '(':
+                    stack.append(n+1)
+                elif c == ')':
+                   yield s[stack.pop():n]
+        def star1_parser(s):
+            # Will have a magnitude and/or a spectral type
+            mag_pattern = '([0-9]\.?[0-9]*)*[A-Z]'
+            mag = re.match(mag_pattern, s)
+            if mag is None or len(mag.group()) < 2:
+                mag_val = np.nan
+                spt = s.strip()
+            else:
+                mag_val = float(mag.group()[:-1])
+                spt = s[mag.end()-1:].strip()
+            return mag_val, spt
+        def orbit_parser(s, delim=' '):
+            period = np.nan
+            eccentricity = np.nan
+            separation = np.nan
+            segments = s.split(delim)
+            if 'd' in segments[0]:
+                period = float(segments[0].split('d')[0])
+                separation = 0.0
+            elif 'y' in segments[0]:
+                period = float(segments[0].split('y')[0]) * 365.25
+                separation = 0.0
+            elif '"' in segments[0]:
+                separation = float(segments[0].split('"')[0])
+            if len(segments) > 1 and 'e=' in segments[1]:
+                eccentricity = float(segments[1].split('=')[-1])
+            return period, eccentricity, separation
+        def star2_parser(s):
+            # Will have the same set of stuff as star1_parser, plus information on the separation OR orbit
+            mag_val, spt = star1_parser(s.split(';')[0])
+            orbit = s.split(';')[1].strip()
+            period, eccentricity, separation = orbit_parser(orbit, ',') if ',' in orbit else orbit_parser(orbit, ' ')
+            return mag_val, spt, period, eccentricity, separation
+
+
+
+        d = {'spt1': [], 'spt2': [], 'mag1': [], 'mag2': [],
+             'Separation': [], 'Period': [], 'eccentricity': [],
+             'Cluster': [c for c in info['Cluster'].values],
+             'BibCode': [b for b in info['BibCode'].values]}
+        for conf in info['Conf'].values:
+            for binary_string in conf_parser(conf):
+                print(binary_string)
+                star1, star2 = binary_string.split('+')
+                star1_mag, star1_spt = star1_parser(star1.strip())
+                star2_mag, star2_spt, period, eccentricity, separation = star2_parser(star2.strip())
+                d['spt1'].append(star1_spt)
+                d['spt2'].append(star2_spt)
+                d['mag1'].append(star1_mag)
+                d['mag2'].append(star2_mag)
+                d['Separation'].append(separation)
+                d['Period'].append(period)
+                d['eccentricity'].append(eccentricity)
+
+        return pd.DataFrame(data=d)
+
+    #TODO: Test et08 parsing!
 
 
 
