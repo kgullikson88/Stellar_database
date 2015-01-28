@@ -48,10 +48,31 @@ class Star_System(Base):
     __tablename__ = 'star_system'
     __table_args__ = {'autoload': True}
 
+    def __contains__(self, star):
+        """
+        Check to see if the given star is in this system
+        :param star:
+        :return: bool (True if the star is in the system, False if not)
+        """
+        retval = False
+        for s in self.stars:
+            if s.name == star.name:
+                retval = True
+        return retval
+
+
 
 class Star_to_Star_System(Base):
     __tablename__ = 'star_to_star_system'
     __table_args__ = {'autoload': True}
+
+
+class Configuration(Base):
+    __tablename__ = 'configuration'
+    __table_args__ = {'autoload': True}
+
+    def get_primary(self):
+        return self.star_system1.stars
 
 
 class Instrument(Base):
@@ -90,6 +111,7 @@ Star.parallax_ref = relation(Reference, foreign_keys=[Star.parallax_ref_id])
 Star.Vmag_ref = relation(Reference, foreign_keys=[Star.Vmag_ref_id])
 Star.Kmag_ref = relation(Reference, foreign_keys=[Star.Kmag_ref_id])
 Star.cluster = relation(Cluster, backref='stars')
+Star.systems = relation(Star_System, secondary=Star_to_Star_System.__table__, backref='stars')
 
 #####     Reference relationships       #####
 Reference.journal = relation(Journal)
@@ -99,10 +121,11 @@ Reference.authors = relation(Author, secondary=Reference_to_Author.__table__, ba
 Cluster.reference = relation(Reference)
 
 #####     Star system relationships       #####
-Star_System.primary = relation(Star, backref='star_systems_prim', foreign_keys=[Star_System.star1_id])
-Star_System.secondary = relation(Star, backref='star_systems_sec', foreign_keys=[Star_System.star2_id])
-Star_System.image_ref = relation(Reference, foreign_keys=[Star_System.separation_ref_id])
-Star_System.spec_ref = relation(Reference, foreign_keys=[Star_System.spec_ref_id])
+#Star_System.configurations = relation(Configuration, foreign_keys=[Configuration])
+
+#####     Configuration relationships       #####
+Configuration.primary = relation(Star_System, foreign_keys=[Configuration.star_system1_id], backref='primaries')
+Configuration.secondary = relation(Star_System, foreign_keys=[Configuration.star_system2_id], backref='secondaries')
 
 #####     Observation relationships       #####
 Observation.star = relation(Star, backref='observations')

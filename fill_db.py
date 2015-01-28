@@ -18,6 +18,7 @@ import SpectralTypeRelations
 from SQLiteConnection import engine, Session
 from ModelClasses import *
 from collections import defaultdict
+import sys
 
 MS = SpectralTypeRelations.MainSequence()
 
@@ -107,7 +108,8 @@ class StellarParameter():
 
 
 class Multiplicity():
-    def __init__(self, csv_dir='{}/Dropbox/School/Research/Databases/A_star/Multiplicity/'.format(os.environ['HOME'])):
+    def __init__(self, sql_session,
+                 csv_dir='{}/Dropbox/School/Research/Databases/A_star/Multiplicity/'.format(os.environ['HOME'])):
         self.sb9 = pd.read_csv('{}SB9_WithNames.txt'.format(csv_dir), sep='|')
         self.wds = pd.read_csv('{}WDS_WithNames.txt'.format(csv_dir), sep='|')
         self.vast = pd.read_csv('{}VAST_WithNames.txt'.format(csv_dir), sep='|')
@@ -117,15 +119,25 @@ class Multiplicity():
         self.wds = self.wds.dropna(subset=['RA', 'DEC'])
         self.wds['DEC'] = self.wds['DEC'].map(lambda s: HelperFunctions.convert_hex_string(s, delimiter=' '))
 
-    def check_multiplicity(self, db_session, d=1.0):
+        self.sql_session = sql_session
+
+        # Define the keys we will use, to standardize between the different databases
+        self.default = {'Sp1': None, 'Sp2': None, 'Per': np.nan, 'e_Per': np.nan,
+                        'K1': np.nan, 'e_K1': np.nan, 'K2': np.nan, 'e_K2': np.nan,
+                        'mag1': np.nan, 'mag2': np.nan, 'separation': np.nan,
+                        'age': np.nan, 'ageref': None, 'mass1': np.nan, 'mass2': np.nan,
+                        'cluster': None, 'sep_bibcode': None, 'orbit_bibcode': None}
+        self.cols = self.default.keys()
+
+    def check_multiplicity(self, d=1.0):
         """
         Cross-references the database stars against the multiplicity databases
         :param db_session: a sqlalchemy session instance
         :keyword d: The on-sky distance between the database star and the entry in the multiplicity databases (in arcsec)
         """
         d /= 3600.0  #Convert d to degrees
-        for star in db_session.query(Star).all():
-            print(star.name)
+        for star in self.sql_session.query(Star).all():
+            print('\n\n', star.name)
             ra = star.RA * 15.0
             dec = star.DEC
             sb9 = self.sb9.loc[((self.sb9.RA - ra)**2 < d) & ((self.sb9.DEC - dec)**2 < d)].drop_duplicates()
@@ -133,24 +145,55 @@ class Multiplicity():
             vast = self.vast.loc[((self.vast.RA - ra)**2 < d) & ((self.vast.DEC - dec)**2 < d)].drop_duplicates()
             et08 = self.et08.loc[((self.et08.RA - ra)**2 < d) & ((self.et08.DEC - dec)**2 < d)].drop_duplicates()
 
+            out_dict = {'sb9': None, 'wds': None, 'vast': None, 'et2008': None}
             if len(sb9) > 0:
-                self.parse_sb9(sb9, star)
+                out_dict['sb9'] = self.parse_sb9(sb9, star)
             if len(wds) > 0:
-                self.parse_wds(wds, star)
+                out_dict['wds'] = self.parse_wds(wds, star)
             if len(vast) > 0:
-                self.parse_vast(vast, star)
+                out_dict['vast'] = self.parse_vast(vast, star)
             if len(et08) > 0:
-                out = self.parse_et08(et08, star)
-                print(out)
+                out_dict['et2008'] = self.parse_et08(et08, star)
+
+            entries = [out_dict[k] is not None for k in out_dict.keys()]
+            print('{:s}  {:.1f}  {:.1f}'.format(star.spectral_type.ljust(5), star.Vmag, star.Kmag))
+            print(entries)
+            for key in out_dict.keys():
+                if out_dict[key] is not None:
+                    print('{}:'.format(key))
+                    print(out_dict[key])
+            if sum(entries) > 0:
+                sys.exit()
 
 
+
+
+
+            """
+            #TODO:
+              1: Figure out which component of the binary this star is in
+              2: Query Star system for this star
+                   db_session.query(Star_System).filter(Star_System.stars.contains(star)).all()
+              3: Make a new star system if this star does not exist in any star systems
+
+            """
+
+        self.cols = ['Sp1', 'Sp2', 'Per', 'e_Per', 'K1', 'e_K1', 'K2', 'e_K2',  #SB9 info
+                     'mag1', 'mag2', 'separation',    #WDS info
+                     'age', 'ageref', 'mass1', 'mass2',   # VAST info
+                     'cluster',   #ET08 info
+                     'sep_bibcode', 'orbit_bibcode']   #bibcodes
     def parse_sb9(self, df, star):
         """
         Pull the information I am interested in out of the SB9 catalog
         """
         cols = [u'Sp1', u'Sp2', u'Per', u'e_Per', u'K1', u'e_K1', u'K2', u'e_K2']
         info  = df[cols]
-        info['Separation'] = 0.0  # Basically 0 if it has a spectroscopic orbit
+        info['separation'] = [0.0]*len(info)  # Basically 0 if it has a spectroscopic orbit
+        for key in self.cols:
+            if key not in info.keys():
+                info[key] = [self.default[key]] * len(info)
+
 
         return info
 
@@ -163,14 +206,11 @@ class Multiplicity():
         return info
 
     def parse_vast(self, df, star):
-        print(df.keys())
-        cols = ['Age', 'AgeRef', 'Mass1', 'Mass2', 'MagDiff', 'Band', 'Separation']
+        cols = ['SpT', 'V_t', 'e_VT', 'K_s', 'e_Ks', 'Age', 'AgeRef', 'Mass1', 'Mass2', 'MagDiff', 'Band', 'Separation']
         info = df[cols]
         return info
 
     def parse_et08(self, df, star):
-        print(df.keys())
-        print(df)
         cols = ['Conf', 'Cluster', 'BibCode']
         info = df[cols]
         info = info.drop_duplicates()
@@ -185,14 +225,15 @@ class Multiplicity():
                    yield s[stack.pop():n]
         def star1_parser(s):
             # Will have a magnitude and/or a spectral type
-            mag_pattern = '([0-9]\.?[0-9]*)*[A-Z]'
+            mag_pattern = '([0-9]+\\.?[0-9]*)?([A-Z][0-9]\\.?[0-9]*.*)?'
             mag = re.match(mag_pattern, s)
-            if mag is None or len(mag.group()) < 2:
-                mag_val = np.nan
-                spt = s.strip()
-            else:
-                mag_val = float(mag.group()[:-1])
-                spt = s[mag.end()-1:].strip()
+            mag_val, spt = None, None
+            if mag is None:
+                return mag_val, spt
+            mag_val = None if mag.groups()[0] is None else float(mag.groups()[0])
+            spt = mag.groups()[1]
+            if spt is not None:
+                spt = spt.strip()
             return mag_val, spt
         def orbit_parser(s, delim=' '):
             period = np.nan
@@ -339,14 +380,40 @@ def add_stellar_parameters(session):
 
 
 
+def make_star_systems(session):
+    """
+    Make a star system for every star
+    """
+    for star in session.query(Star).all():
+        print(star.name)
+        try:
+            ss = session.query(Star_System).filter(Star_System.stars.contains(star)).one()
+            print('\tStar already in a star system!')
+        except sqlalchemy.orm.exc.NoResultFound:
+            ss = Star_System()
+            ss.stars.append(star)
+            print('\tAdding new star system')
+
+            session.add(ss)
+            session.flush()
+
+    return session
+
+def add_multiplicity(session):
+    mult = Multiplicity(session)
+    mult.check_multiplicity()
+
+    return mult.sql_session
 
 
 
 if __name__ == '__main__':
     session = Session()
     session.begin()
-    session = get_simbad_data(session)
+    #session = get_simbad_data(session)
     #session = add_stellar_parameters(session)
+    #session = make_star_systems(session)
+    add_multiplicity(session)
 
     session.commit()
     engine.dispose()
