@@ -49,6 +49,11 @@ class Star_System(Base):
     __table_args__ = {'autoload': True}
 
 
+class Star_to_Star_System(Base):
+    __tablename__ = 'star_to_star_system'
+    __table_args__ = {'autoload': True}
+
+
 class Instrument(Base):
     __tablename__ = 'instrument'
     __table_args__ = {'autoload': True}
@@ -67,6 +72,7 @@ class CCF(Base):
 class Observation(Base):
     __tablename__ = 'observation'
     __table_args__ = {'autoload': True}  # =========================
+
 
 # Define relationships here
 # =========================

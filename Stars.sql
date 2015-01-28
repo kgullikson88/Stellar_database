@@ -43,7 +43,19 @@ CREATE TABLE "star" ("id" INTEGER PRIMARY KEY  AUTOINCREMENT  NOT NULL  UNIQUE, 
                     FOREIGN KEY (cluster_id) REFERENCES cluster (id));
 
 DROP TABLE IF EXISTS "star_system";
-CREATE TABLE "star_system" ("id" INTEGER PRIMARY KEY  AUTOINCREMENT  NOT NULL  UNIQUE , "star1_id" INTEGER, "star2_id" INTEGER, "separation" FLOAT, "separation_error" FLOAT, "separation_ref_id" INTEGER, "period" FLOAT, "period_error" FLOAT, "spec_ref_id" INTEGER, "K1" FLOAT, "K1_error" FLOAT, "K2" FLOAT, "K2_error" FLOAT, FOREIGN KEY (star1_id) REFERENCES star (id), FOREIGN KEY (star2_id) REFERENCES star (id), FOREIGN KEY (separation_ref_id) REFERENCES reference (id), FOREIGN KEY (spec_ref_id) REFERENCES reference (id));
+CREATE TABLE "star_system" ("id" INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL UNIQUE);
+
+DROP TABLE IF EXISTS "star_to_star_system";
+CREATE TABLE "star_to_star_system" ("star1_id" INTEGER NOT NULL, "star2_id" INTEGER NOT NULL, "star_system_id" INTEGER NOT NULL,
+                                    "separation" FLOAT, "separation_error" FLOAT, "separation_ref_id" INTEGER, "period" FLOAT,
+                                    "period_error" FLOAT, "spec_ref_id" INTEGER, "component" TEXT,
+                                    "K1" FLOAT, "K1_error" FLOAT, "K2" FLOAT, "K2_error" FLOAT,
+                                    PRIMARY KEY ("star1_id", "star2_id", "star_system_id")
+                                    FOREIGN KEY (star1_id) REFERENCES star (id),
+                                    FOREIGN KEY (star2_id) REFERENCES star (id),
+                                    FOREIGN KEY (star_system_id) REFERENCES star_system (id),
+                                    FOREIGN KEY (separation_ref_id) REFERENCES reference (id),
+                                    FOREIGN KEY (spec_ref_id) REFERENCES reference (id));
 
 DROP TABLE IF EXISTS "instrument";
 CREATE TABLE "instrument" ("id" INTEGER PRIMARY KEY  AUTOINCREMENT  NOT NULL  UNIQUE , "name" TEXT, "reference_id" INTEGER, FOREIGN KEY (reference_id) REFERENCES reference (id));
