@@ -239,7 +239,6 @@ class Multiplicity():
 
         return pd.DataFrame(data=d)
 
-    #TODO: Test et08 parsing!
 
 
 
