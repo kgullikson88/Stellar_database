@@ -119,6 +119,9 @@ class Multiplicity():
         self.wds = self.wds.dropna(subset=['RA', 'DEC'])
         self.wds['DEC'] = self.wds['DEC'].map(lambda s: HelperFunctions.convert_hex_string(s, delimiter=' '))
 
+        # Remove entries in VAST with no separation, Magdiff, or band
+        self.vast = self.vast.dropna(subset=['Separation', 'MagDiff', 'Band'])
+
         self.sql_session = sql_session
 
         # Define the keys we will use, to standardize between the different databases
@@ -128,6 +131,7 @@ class Multiplicity():
                         'age': np.nan, 'ageref': None, 'mass1': np.nan, 'mass2': np.nan,
                         'cluster': None, 'sep_bibcode': None, 'orbit_bibcode': None}
         self.cols = self.default.keys()
+        self.MS = SpectralTypeRelations.MainSequence()
 
     def check_multiplicity(self, d=1.0):
         """
@@ -178,37 +182,73 @@ class Multiplicity():
 
             """
 
-        self.cols = ['Sp1', 'Sp2', 'Per', 'e_Per', 'K1', 'e_K1', 'K2', 'e_K2',  #SB9 info
-                     'mag1', 'mag2', 'separation',    #WDS info
-                     'age', 'ageref', 'mass1', 'mass2',   # VAST info
-                     'cluster',   #ET08 info
-                     'sep_bibcode', 'orbit_bibcode']   #bibcodes
+
     def parse_sb9(self, df, star):
         """
         Pull the information I am interested in out of the SB9 catalog
         """
-        cols = [u'Sp1', u'Sp2', u'Per', u'e_Per', u'K1', u'e_K1', u'K2', u'e_K2']
+        cols = [u'Sp1', u'Sp2', u'Per', u'e_Per', u'K1', u'e_K1', u'K2', u'e_K2', 'Ref']
         info  = df[cols]
         info['separation'] = [0.0]*len(info)  # Basically 0 if it has a spectroscopic orbit
+        info = info.rename({'Ref': 'orbit_bibcode'})
         for key in self.cols:
             if key not in info.keys():
                 info[key] = [self.default[key]] * len(info)
-
-
         return info
 
     def parse_wds(self, df, star):
         """
         Pull the relevant information from the wds catalog
         """
-        cols = ['sep2', 'mag1', 'mag2', 'RefCode', 'Disc']
+        cols = ['sep2', 'mag1', 'mag2', 'RefCode']
         info = df[cols]
+        info = info.rename({'sep2': 'separation', 'RefCode': 'sep_bibcode'})
+        for key in self.cols:
+            if key not in info.keys():
+                info[key] = [self.default[key]] * len(info)
         return info
 
     def parse_vast(self, df, star):
-        cols = ['SpT', 'V_t', 'e_VT', 'K_s', 'e_Ks', 'Age', 'AgeRef', 'Mass1', 'Mass2', 'MagDiff', 'Band', 'Separation']
+        cols = ['SpT', 'B_t', 'e_BT', 'V_t', 'e_VT', 'H', 'e_H', 'K_s', 'e_Ks', 'Age', 'AgeRef', 'Mass1', 'Mass2', 'MagDiff', 'Band', 'Separation']
         info = df[cols]
+        info = info.rename({'SpT': 'Sp1', 'Mass1': 'mass1', 'Mass2': 'mass2', 'Separation': 'separation'})
+
+        # Convert V_t to V (Use 2002AJ....124.1670M)
+        BmV = info['B_T'].values - info['V_T'].values  #B_t - V_t
+        e_BmV = np.sqrt(info['e_BT']**2 + info['e_VT']**2)  #error on B_t - V_t
+        a = 9.7e-4
+        b = -1.334e-1
+        c = 5.486e-2
+        d = -1.998e-2
+        V = info['V_T'].values + a + b*BmV + c*BmV**2 + d*BmV**3
+        e_V = np.sqrt((info['e_VT'].values)**2 + (b*e_BmV)**2 + (2*c*e_BmV)**2 + (3*d*BmV**2 + e_BmV)**2 )
+
+        # Convert magdiff and band into mag1 and mag2
+        key_dict = {'H': 'H', 'K': 'K_s'}
+        absmag_prim = self.MS.GetAbsoluteMagnitude(info['Sp1'].values, color=key_dict[info['Band'].values])
+        obsmag_prim = info[key_dict[info['Band'].values]].values
+        d = absmag_prim - obsmag_prim
+        obsmag_sec = obsmag_prim + info['MagDiff'].values
+        absmag_sec = obsmag_sec + d
+        sp2 = self.MS.GetSpectralType_FromAbsMag(absmag_sec, color=key_dict[info['Band'].values])
+        #TODO: put sp2, mag1, and mag2 in the 'info' dict (mags should be V magnitudes
+
+
+
+        # Make a new dataframe with the correct values
+        info = info[['Sp1', 'mass1', 'mass2', 'separation', 'Age', 'AgreRef']]
+
         return info
+
+
+
+        self.cols = ['Sp1', 'Sp2', 'Per', 'e_Per', 'K1', 'e_K1', 'K2', 'e_K2',  #SB9 info
+                     'mag1', 'mag2', 'separation',    #WDS info
+                     'age', 'ageref', 'mass1', 'mass2',   # VAST info
+                     'cluster',   #ET08 info
+                     'sep_bibcode', 'orbit_bibcode']   #bibcodes
+
+
 
     def parse_et08(self, df, star):
         cols = ['Conf', 'Cluster', 'BibCode']
