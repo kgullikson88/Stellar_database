@@ -4,8 +4,9 @@ from __future__ import print_function
 import logging
 import os
 import re
-import numpy as np
+import sys
 
+import numpy as np
 import sqlalchemy
 from astroquery.simbad import Simbad
 from astroquery.vizier import Vizier
@@ -17,8 +18,7 @@ import SpectralTypeRelations
 
 from SQLiteConnection import engine, Session
 from ModelClasses import *
-from collections import defaultdict
-import sys
+
 
 MS = SpectralTypeRelations.MainSequence()
 
@@ -160,13 +160,13 @@ class Multiplicity():
                 out_dict['et2008'] = self.parse_et08(et08, star)
 
             entries = [out_dict[k] is not None for k in out_dict.keys()]
-            print('{:s}  {:.1f}  {:.1f}'.format(star.spectral_type.ljust(5), star.Vmag, star.Kmag))
+            print('{:s}  {}  {}\n'.format(star.spectral_type.ljust(5), star.Vmag, star.Kmag))
             print(entries)
             for key in out_dict.keys():
                 if out_dict[key] is not None:
                     print('{}:'.format(key))
                     print(out_dict[key])
-            if sum(entries) > 0:
+            if sum(entries) > 3:
                 sys.exit()
 
 
@@ -209,9 +209,10 @@ class Multiplicity():
         return info
 
     def parse_vast(self, df, star):
-        cols = ['SpT', 'B_t', 'e_BT', 'V_t', 'e_VT', 'H', 'e_H', 'K_s', 'e_Ks', 'Age', 'AgeRef', 'Mass1', 'Mass2', 'MagDiff', 'Band', 'Separation']
+        cols = ['SpT', 'B_T', 'e_BT', 'V_T', 'e_VT', 'H', 'e_H', 'K_s', 'e_Ks', 'Age', 'AgeRef', 'Mass1', 'Mass2',
+                'MagDiff', 'Band', 'Separation']
         info = df[cols]
-        info = info.rename({'SpT': 'Sp1', 'Mass1': 'mass1', 'Mass2': 'mass2', 'Separation': 'separation'})
+        info = info.rename(columns={'SpT': 'Sp1', 'Mass1': 'mass1', 'Mass2': 'mass2', 'Separation': 'separation'})
 
         # Convert V_t to V (Use 2002AJ....124.1670M)
         BmV = info['B_T'].values - info['V_T'].values  #B_t - V_t
@@ -225,29 +226,24 @@ class Multiplicity():
 
         # Convert magdiff and band into mag1 and mag2
         key_dict = {'H': 'H', 'K': 'K_s'}
-        absmag_prim = self.MS.GetAbsoluteMagnitude(info['Sp1'].values, color=key_dict[info['Band'].values])
-        obsmag_prim = info[key_dict[info['Band'].values]].values
+        absmag_prim = self.MS.GetAbsoluteMagnitude(info['Sp1'].values[0], color=info['Band'].values[0])
+        obsmag_prim = info[key_dict[info['Band'].values[0]]].values[0]
         d = absmag_prim - obsmag_prim
-        obsmag_sec = obsmag_prim + info['MagDiff'].values
+        obsmag_sec = obsmag_prim + info['MagDiff'].values[0]
         absmag_sec = obsmag_sec + d
-        sp2 = self.MS.GetSpectralType_FromAbsMag(absmag_sec, color=key_dict[info['Band'].values])
-        #TODO: put sp2, mag1, and mag2 in the 'info' dict (mags should be V magnitudes
-
-
+        sp2 = self.MS.GetSpectralType_FromAbsMag(absmag_sec, color=info['Band'].values[0])
 
         # Make a new dataframe with the correct values
-        info = info[['Sp1', 'mass1', 'mass2', 'separation', 'Age', 'AgreRef']]
+        info = info[['Sp1', 'mass1', 'mass2', 'separation', 'Age', 'AgeRef']]
+        info['Sp2'] = sp2
+        info['mag1'] = V
+        info['mag2'] = MS.GetAbsoluteMagnitude(sp2, color='V') - d
 
+        # Put the rest of the keys into the output dataframe
+        for key in self.cols:
+            if key not in info.keys():
+                info[key] = [self.default[key]] * len(info)
         return info
-
-
-
-        self.cols = ['Sp1', 'Sp2', 'Per', 'e_Per', 'K1', 'e_K1', 'K2', 'e_K2',  #SB9 info
-                     'mag1', 'mag2', 'separation',    #WDS info
-                     'age', 'ageref', 'mass1', 'mass2',   # VAST info
-                     'cluster',   #ET08 info
-                     'sep_bibcode', 'orbit_bibcode']   #bibcodes
-
 
 
     def parse_et08(self, df, star):
@@ -299,29 +295,40 @@ class Multiplicity():
             return mag_val, spt, period, eccentricity, separation
 
 
-
-        d = {'spt1': [], 'spt2': [], 'mag1': [], 'mag2': [],
-             'Separation': [], 'Period': [], 'eccentricity': [],
-             'Cluster': [c for c in info['Cluster'].values],
-             'BibCode': [b for b in info['BibCode'].values]}
-        for conf in info['Conf'].values:
+        bibcode = info['BibCode'].values[0]
+        d = {'Sp1': [], 'Sp2': [], 'mag1': [], 'mag2': [],
+             'separation': [], 'Per': [],
+             'cluster': [],
+             'sep_bibcode': [], 'orbit_bibcode': []}
+        for i, conf in enumerate(info['Conf'].values):
             for binary_string in conf_parser(conf):
                 print(binary_string)
                 star1, star2 = binary_string.split('+')
                 star1_mag, star1_spt = star1_parser(star1.strip())
                 star2_mag, star2_spt, period, eccentricity, separation = star2_parser(star2.strip())
-                d['spt1'].append(star1_spt)
-                d['spt2'].append(star2_spt)
+                d['Sp1'].append(star1_spt)
+                d['Sp2'].append(star2_spt)
                 d['mag1'].append(star1_mag)
                 d['mag2'].append(star2_mag)
-                d['Separation'].append(separation)
-                d['Period'].append(period)
-                d['eccentricity'].append(eccentricity)
+                d['separation'].append(separation)
+                d['Per'].append(period)
+                d['cluster'].append(info['Cluster'].values[i])
+                if not np.isnan(separation):
+                    d['sep_bibcode'].append(bibcode)
+                else:
+                    d['sep_bibcode'].append(None)
+                if not np.isnan(period):
+                    d['orbit_bibcode'].append(bibcode)
+                else:
+                    d['orbit_bibcode'].append(None)
 
-        return pd.DataFrame(data=d)
+        info = pd.DataFrame(data=d)
 
-
-
+        # Put the rest of the keys into the output dataframe
+        for key in self.cols:
+            if key not in info.keys():
+                info[key] = [self.default[key]] * len(info)
+        return info
 
 
 
