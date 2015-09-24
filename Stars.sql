@@ -17,6 +17,7 @@ CREATE TABLE "cluster" ("id" INTEGER PRIMARY KEY  AUTOINCREMENT  NOT NULL  UNIQU
 
 DROP TABLE IF EXISTS "star";
 CREATE TABLE "star" ("id" INTEGER PRIMARY KEY  AUTOINCREMENT  NOT NULL  UNIQUE, "name" TEXT ,
+                     "main_id" TEXT,
                      "cluster_id" INTEGER, "component" TEXT,
                      "spectral_type" TEXT, "spectral_type_ref_id" INTEGER, 
                      "temperature" FLOAT, "temperature_error" FLOAT, "temperature_ref_id" INTEGER, 
