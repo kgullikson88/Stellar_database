@@ -23,6 +23,7 @@ CREATE TABLE "star" ("id" INTEGER PRIMARY KEY  AUTOINCREMENT  NOT NULL  UNIQUE, 
                      "temperature" FLOAT, "temperature_error" FLOAT, "temperature_ref_id" INTEGER, 
                      "logg" FLOAT, "logg_error" FLOAT, "logg_ref_id" INTEGER, 
                      "mass" FLOAT, "mass_error" FLOAT, "mass_ref_id" INTEGER, 
+                     "age" FLOAT, "age_error" FLOAT, "age_ref_id" INTEGER, 
                      "metallicity" FLOAT, "metallicity_error" FLOAT, "metallicity_ref_id" INTEGER, 
                      "radius" FLOAT, "radius_error" FLOAT, "radius_ref_id" INTEGER, 
                      "vsini" FLOAT, "vsini_error" FLOAT, "vsini_ref_id" INTEGER, 
@@ -34,6 +35,7 @@ CREATE TABLE "star" ("id" INTEGER PRIMARY KEY  AUTOINCREMENT  NOT NULL  UNIQUE, 
                      FOREIGN KEY (temperature_ref_id) REFERENCES reference (id),
                      FOREIGN KEY (logg_ref_id) REFERENCES reference (id),
                      FOREIGN KEY (mass_ref_id) REFERENCES reference (id),
+                     FOREIGN KEY (age_ref_id) REFERENCES reference (id),
                      FOREIGN KEY (metallicity_ref_id) REFERENCES reference (id),
                      FOREIGN KEY (spectral_type_ref_id) REFERENCES reference (id),
                      FOREIGN KEY (radius_ref_id) REFERENCES reference (id),
@@ -75,3 +77,10 @@ CREATE TABLE "ccf" ("id" INTEGER PRIMARY KEY  AUTOINCREMENT  NOT NULL  UNIQUE , 
 
 DROP TABLE IF EXISTS "observation";
 CREATE TABLE "observation" ("id" INTEGER PRIMARY KEY  AUTOINCREMENT  NOT NULL  UNIQUE , "instrument_id" INTEGER, "date" TEXT, "star_id" INTEGER, "spectrum_id" INTEGER, "ccf_id" INTEGER, "notes" TEXT, FOREIGN KEY (instrument_id) REFERENCES instrument (id), FOREIGN KEY (star_id) REFERENCES star (id), FOREIGN KEY (spectrum_id) REFERENCES spectrum (id), FOREIGN KEY (ccf_id) REFERENCES ccf (id));
+
+DROP TABLE IF EXISTS "pulkovo2006";
+CREATE TABLE "pulkovo2006" ("id" INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL UNIQUE, 
+                            "rv" FLOAT, "rv_err" FLOAT,
+                            "o_RV" FLOAT, "eRV" FLOAT,
+                            "star_id" INTEGER,
+                            FOREIGN KEY (star_id) REFERENCES star (id))

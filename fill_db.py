@@ -37,14 +37,16 @@ def get_reference(session, bibcode):
         #TODO: get author name, journal, volume, page, and year
     return entry, session
 
-
+DH2015_FILE = '{}/Dropbox/School/Research/AstarStuff/TargetLists/David_and_Hillenbrand2015/dh2015-table5.csv'.format(os.environ['HOME'])
 class StellarParameter():
-    def __init__(self, sql_session):
+    def __init__(self, sql_session, dh2015_filename=DH2015_FILE):
         self.pastel = Vizier(columns=['_RAJ2000', 'DEJ2000', 'ID', 'Teff', 'e_Teff',
                                       'logg', 'e_logg', '[Fe/H]', 'e_[Fe/H]', 'bibcode'],
                              catalog='B/pastel/pastel')
         self.pastel_bibcode = '2010A&A...515A.111S'
         self.sql_session = sql_session
+        self.dh2015_df = pd.read_csv(dh2015_filename)
+        self.dh2015_bibcode = '2015ApJ...804..146D'
 
     def get_pastel_pars(self, starname):
         """
@@ -96,9 +98,6 @@ class StellarParameter():
         feh, e_feh = HelperFunctions.weighted_mean_and_stddev(feh_arr, 
                                                               weights=1.0/e_feh_arr**2,
                                                               bad_value=None)
-        print(Teff, e_Teff)
-        print(logg, e_logg)
-        print(feh, e_feh)
 
         # Get the reference to the pastel reference table
         bibcode = self.pastel_bibcode
@@ -118,6 +117,61 @@ class StellarParameter():
         return True
 
 
+    def get_dh2015_pars(self, starname):
+        """ Get stellar parameters from David & Hillenbrand (2015)
+        """
+        try:
+            star = self.sql_session.query(Star).filter(Star.name == starname).one()
+        except sqlalchemy.orm.exc.NoResultFound:
+            raise ValueError('Must put star in database before giving it parameters!')
+
+        # Check if this star is in the David & Hillenbrand sample
+        if 'HIP' in starname.upper():
+            hipnum = int(starname.upper().split('HIP')[-1].strip())
+            if hipnum in self.dh2015_df.HIP:
+                data = self.dh2015_df.loc[self.dh2015_df.HIP == hipnum]
+            else:
+                return False
+
+        else:
+            return False
+
+        if len(data) == 0:
+            return False
+
+        print(data)
+        Teff = data['T']
+        e_Teff = data['T_err']
+        logg = data['logg']
+        e_logg = data['logg_err']
+        age = data['age_mode']
+        e_age = (data['age_1sig_interval_upper'] - data['age_1sig_interval_lower'])/2.0
+        mass = data['mass_mode']
+        e_mass = (data['mass_1sig_interval_upper'] - data['mass_1sig_interval_lower'])/2.0
+
+        bibcode = self.dh2015_bibcode
+        ref, self.sql_session = get_reference(self.sql_session, bibcode if len(bibcode) > 0 else 'Unknown')
+        
+        # Put the data into the database
+        star.temperature = Teff.item()
+        star.temperature_error = e_Teff.item()
+        star.temperature_ref = ref
+        star.logg = logg.item()
+        star.logg_error = e_logg.item()
+        star.logg_ref = ref
+        star.age = age.item()
+        star.age_err = e_age.item()
+        star.age_ref = ref
+        star.mass = mass.item()
+        star.mass_err = e_mass.item()
+        star.mass_ref = ref
+
+        return True
+
+
+
+
+
     def get_all_pars(self):
         """
           Fill all the parameters from known catalogs
@@ -127,10 +181,12 @@ class StellarParameter():
         for star in self.sql_session.query(Star).all():
             print(star.name)
             out = self.get_pastel_pars(star.name)
-            if out:
-                success.append(out)
+            #out = True
+            out2 = self.get_dh2015_pars(star.name)
+            if out & out2:
+                success.append(out & out2)
             else:
-                fail.append(out)
+                fail.append(out & out2)
         logging.info('Of all stars in the database, we got stellar parameters for {} of them'.format(len(success)))
         return
 
@@ -138,7 +194,7 @@ class StellarParameter():
 def get_simbad_data(session, starlist_filename='starlist.dat'):
     # Read in the star list
     infile = open(starlist_filename)
-    starlist = infile.readlines()
+    starlist = [f.strip() for f in infile.readlines()]
     infile.close()
 
     # Make an appropriate Simbad search object
